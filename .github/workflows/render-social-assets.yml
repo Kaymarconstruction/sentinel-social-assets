@@ -28,8 +28,17 @@ jobs:
           from pathlib import Path
           import cairosvg
           from PIL import Image
-          for source in sorted(Path('source').glob('*.svg')):
-              output = Path(source.stem+'.png')
+          masters = sorted(Path('source').glob('0?_*.svg'))
+          posts = sorted(Path('source/posts').glob('*.svg')) if Path('source/posts').exists() else []
+          assert len(masters)==3, 'Expected three master SVGs'
+          assert len(posts)<=100, 'Limit per-post render batch'
+          for source in masters+posts:
+              if source in posts:
+                  assert source.stem[:10].replace('-','').isdigit(), 'Per-post filenames must begin YYYY-MM-DD'
+                  output = Path('posts')/(source.stem+'.png')
+                  output.parent.mkdir(exist_ok=True)
+              else:
+                  output = Path(source.stem+'.png')
               cairosvg.svg2png(url=str(source),write_to=str(output),output_width=1600,output_height=900)
               with Image.open(output) as image:
                   image.verify()
@@ -37,13 +46,13 @@ jobs:
                   assert image.size == (1600,900), (output,image.size)
                   assert image.format == 'PNG', (output,image.format)
               print(f'{output}: verified PNG, {output.stat().st_size} bytes')
-          assert len(list(Path('.').glob('0?_*.png'))) == 3, 'Expect exactly three render outputs'
           PY
-      - name: Publish only the three PNG assets
+      - name: Publish public-safe PNG assets
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- 01_project_teaser.png 02_milestone_update.png 03_community_investigation.png
+          if [ -d posts ]; then git add -- posts/*.png; fi
           if git diff --cached --quiet; then
             echo "No image changes"
           else
