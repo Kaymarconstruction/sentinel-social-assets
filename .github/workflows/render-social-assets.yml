@@ -1,0 +1,52 @@
+name: Render Sentinel public social images
+on:
+  push:
+    paths:
+      - 'source/**'
+      - '.github/workflows/render-social-assets.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: sentinel-social-assets-render
+  cancel-in-progress: false
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout public asset repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deterministic SVG renderer
+        run: python -m pip install --disable-pip-version-check cairosvg==2.7.1 Pillow==11.2.1
+      - name: Render public PNGs and check size
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import cairosvg
+          from PIL import Image
+          for source in sorted(Path('source').glob('*.svg')):
+              output = Path(source.stem+'.png')
+              cairosvg.svg2png(url=str(source),write_to=str(output),output_width=1600,output_height=900)
+              with Image.open(output) as image:
+                  image.verify()
+              with Image.open(output) as image:
+                  assert image.size == (1600,900), (output,image.size)
+                  assert image.format == 'PNG', (output,image.format)
+              print(f'{output}: verified PNG, {output.stat().st_size} bytes')
+          assert len(list(Path('.').glob('0?_*.png'))) == 3, 'Expect exactly three render outputs'
+          PY
+      - name: Publish only the three PNG assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- 01_project_teaser.png 02_milestone_update.png 03_community_investigation.png
+          if git diff --cached --quiet; then
+            echo "No image changes"
+          else
+            git commit -m "Render approved public-safe Sentinel social PNG assets"
+            git push origin HEAD:main
+          fi
