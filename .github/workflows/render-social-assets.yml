@@ -28,15 +28,18 @@ jobs:
           from pathlib import Path
           import cairosvg
           from PIL import Image
-          masters = sorted(Path('source').glob('0?_*.svg'))
+          masters = [Path('source/01_project_teaser.svg')]
           posts = sorted(Path('source/posts').glob('*.svg')) if Path('source/posts').exists() else []
-          assert len(masters)==3, 'Expected three master SVGs'
+          assert all(path.exists() for path in masters), 'Expected teaser master SVG'
           assert len(posts)<=100, 'Limit per-post render batch'
           for source in masters+posts:
               if source in posts:
                   assert source.stem[:10].replace('-','').isdigit(), 'Per-post filenames must begin YYYY-MM-DD'
                   output = Path('posts')/(source.stem+'.png')
                   output.parent.mkdir(exist_ok=True)
+                  if output.exists():
+                      print(f'{output}: existing approved PNG preserved')
+                      continue
               else:
                   output = Path(source.stem+'.png')
               cairosvg.svg2png(url=str(source),write_to=str(output),output_width=1600,output_height=900)
@@ -51,7 +54,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- 01_project_teaser.png 02_milestone_update.png 03_community_investigation.png
+          git add -- 01_project_teaser.png
           if [ -d posts ]; then git add -- posts/*.png; fi
           if git diff --cached --quiet; then
             echo "No image changes"
